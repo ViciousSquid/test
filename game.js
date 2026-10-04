@@ -330,7 +330,7 @@
         return false;
       }
       // The belt must point into the machine's input side.
-      if (inputDirection(target) !== belt.dir) return false;
+      if (inputDirection(target) !== opposite(belt.dir)) return false;
       return deliverFromBelt(belt, item, target);
     }
 
