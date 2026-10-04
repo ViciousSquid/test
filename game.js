@@ -32,63 +32,63 @@
   ];
 
   const ITEMS = {
-    leek: { label: "Raw leek", glyph: "🥬", value: 5 },
-    chopped: { label: "Chopped leek", glyph: "✂", value: 12 },
-    stew: { label: "Leek stew", glyph: "🍲", value: 28 },
-    box: { label: "Leek box", glyph: "📦", value: 65 },
-    crate: { label: "Export crate", glyph: "🧰", value: 110 }
+    leek: { label: "Whatchamacallit", glyph: "🔩", value: 5 },
+    processed: { label: "Processed Whatchamacallit", glyph: "✂", value: 12 },
+    thingamagig: { label: "Leek thingamagig", glyph: "🍲", value: 28 },
+    doohickey: { label: "Leek doohickey", glyph: "📦", value: 65 },
+    gizmo: { label: "Export gizmo", glyph: "🧰", value: 110 }
   };
 
   // Recipes are data, not hard-coded production logic.
   const RECIPES = {
     cutter: {
       key: "cutter",
-      name: "Cutter",
+      name: "Thingamajig Processor",
       hotkey: "3",
       cost: 120,
       unlock: 0,
       input: "leek",
-      output: "chopped",
+      output: "processed",
       time: 1.5,
       capacity: 2,
       color: "#4d7fa7",
       glyph: "✂",
-      desc: "Cuts raw leek into chopped leek"
+      desc: "Cuts raw leek into processed leek"
     },
     cooker: {
       key: "cooker",
-      name: "Cooker",
+      name: "Thingamagig Cooker",
       hotkey: "4",
       cost: 180,
       unlock: 600,
-      input: "chopped",
-      output: "stew",
+      input: "processed",
+      output: "thingamagig",
       time: 2.0,
       capacity: 2,
       color: "#b06a43",
       glyph: "🍲",
-      desc: "Cooks chopped leek into stew"
+      desc: "Cooks processed leek into thingamagig"
     },
     packer: {
       key: "packer",
-      name: "Packer",
+      name: "Doohickey Packer",
       hotkey: "5",
       cost: 240,
       unlock: 1800,
-      input: "stew",
-      output: "box",
+      input: "thingamagig",
+      output: "doohickey",
       time: 2.2,
       capacity: 2,
       color: "#a78b4c",
       glyph: "📦",
-      desc: "Packs stew into valuable boxes"
+      desc: "Packs thingamagig into valuable doohickeyes"
     }
   };
 
   const BUILDINGS = {
     planter: {
-      key: "planter", name: "Leek Patch", hotkey: "1", cost: 100, unlock: 0,
-      desc: "Grows raw leeks", color: "#5b963b", glyph: "🥬", role: "producer",
+      key: "planter", name: "Whatchamacallit Feeder", hotkey: "1", cost: 100, unlock: 0,
+      desc: "Produces Whatchamacallits", color: "#5b963b", glyph: "🔩", role: "producer",
       time: 2.5, output: "leek"
     },
     belt: {
@@ -99,7 +99,7 @@
     cooker: RECIPES.cooker,
     packer: RECIPES.packer,
     market: {
-      key: "market", name: "Restaurant", hotkey: "6", cost: 140, unlock: 0,
+      key: "market", name: "Thingamabob Depot", hotkey: "6", cost: 140, unlock: 0,
       desc: "Sells delivered products", color: "#8d4b71", glyph: "$", role: "seller"
     },
     battery: {
@@ -124,7 +124,7 @@
       hovered: null,
       selected: null,
       buildings: new Map(),
-      stats: { leek: 0, chopped: 0, stew: 0, box: 0 },
+      stats: { leek: 0, processed: 0, thingamagig: 0, doohickey: 0 },
       sold: 0,
       efficiency: 1,
       messages: []
@@ -157,7 +157,7 @@
     state = freshState();
     addBuilding("planter", 3, 7, 0);
     addBuilding("market", 21, 7, 2);
-    showMessage("Factory online. Build a straight production line and watch the boxes move.");
+    showMessage("Factory online. Build a straight production line and watch the doohickeyes move.");
     updateBuildMenu();
   }
 
@@ -296,7 +296,7 @@
     state.revenue += value;
     state.sold++;
     if (state.revenue < 250 || state.revenue % 500 < value) {
-      showMessage("Restaurant sold " + ITEMS[item].label + " for $" + value + ".");
+      showMessage("Thingamabob Depot sold " + ITEMS[item].label + " for $" + value + ".");
     }
   }
 
@@ -776,12 +776,12 @@ function drawBackground() {
     ctx.textBaseline = "alphabetic";
     ctx.font = "12px system-ui";
     ctx.fillStyle = "#d6e5d0";
-    ctx.fillText("LEEKWORKS // NORTH WAREHOUSE // " + (state.paused ? "PAUSED" : "RUNNING"), 18, 14);
+    ctx.fillText("WHATCHAMACORP // GENERAL PRODUCTION WAREHOUSE // " + (state.paused ? "PAUSED" : "RUNNING"), 18, 14);
 
     if (state.revenue >= GOAL) {
       ctx.fillStyle = "#ebef9f";
       ctx.font = "700 18px system-ui";
-      ctx.fillText("THE GREAT LEEKINATION — FACTORY TYCOON COMPLETE", 18, 705);
+      ctx.fillText("THE GREAT WHATCHAMACALLIT PRODUCTION RUN — COMPLETE", 18, 705);
     }
   }
 
@@ -856,10 +856,10 @@ function drawBackground() {
       .join(", ");
 
     productionEl.innerHTML =
-      "🥬 Raw consumed: " + state.stats.leek + "<br>" +
-      "✂ Chopped: " + state.stats.chopped + "<br>" +
-      "🍲 Stew: " + state.stats.stew + "<br>" +
-      "📦 Boxes: " + state.stats.box + "<br>" +
+      "🔩 Whatchamacallits consumed: " + state.stats.leek + "<br>" +
+      "✂ Chopped: " + state.stats.processed + "<br>" +
+      "🍲 Stew: " + state.stats.thingamagig + "<br>" +
+      "📦 Boxes: " + state.stats.doohickey + "<br>" +
       "💵 Items sold: " + state.sold + "<br>" +
       "⚡ Factory speed: " + state.efficiency.toFixed(2) + "×<br>" +
       "🏭 Machines: " + (machineRows || "none");
