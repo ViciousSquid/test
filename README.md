@@ -24,3 +24,14 @@ Belts are animated and each item visibly travels from tile to tile. Machines are
 ## Design goal
 
 This is intentionally a compact prototype rather than a framework-heavy game. The simulation is deterministic and runs entirely in the browser, making the repository easy to fork and host with GitHub Pages.
+
+
+## Factory model
+
+The prototype now follows the physical-production pattern found in factory games: conveyors carry discrete items across the grid, machines have a directional input and output, and a recipe determines what an item becomes and what it is worth.
+
+The research target is deliberately split:
+- **Factorio:** directional belts, moving item entities, throughput/flow, and machines as explicit production stages.
+- **Leek Factory Tycoon:** compact top-down factory layouts, recipes, visible conveyor production, upgrades, and an idle-tycoon value loop.
+
+The game is not a clone of either game's art or UI.
