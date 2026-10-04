@@ -30,10 +30,10 @@
   ];
 
   const ITEM = {
-    leek: { label: "Raw leek", glyph: "🥬" },
-    chopped: { label: "Chopped leek", glyph: "✂" },
-    stew: { label: "Leek stew", glyph: "🍲" },
-    box: { label: "Leek box", glyph: "📦" }
+    leek: { label: "Raw leek", glyph: "🥬", value: 5 },
+    chopped: { label: "Chopped leek", glyph: "✂", value: 12 },
+    stew: { label: "Leek stew", glyph: "🍲", value: 28 },
+    box: { label: "Leek box", glyph: "📦", value: 65 }
   };
 
   const BUILDINGS = {
@@ -63,8 +63,7 @@
     },
     market: {
       key: "market", name: "Market", hotkey: "6", cost: 140, unlock: 0,
-      desc: "Sells leek boxes", color: "#8d4b71", glyph: "$", role: "seller",
-      input: "box", sale: 65
+      desc: "Sells anything delivered", color: "#8d4b71", glyph: "$", role: "seller"
     },
     battery: {
       key: "battery", name: "Accumulator", hotkey: "7", cost: 90, unlock: 5000,
@@ -230,8 +229,8 @@
       target.item = { type: item, t: 0 };
       return true;
     }
-    if (target.type === "market" && item === "box") {
-      sellBox(target);
+    if (target.type === "market") {
+      sellItem(target, item);
       return true;
     }
     return false;
@@ -268,12 +267,13 @@
 
   // Machine recipes are deliberately data-driven: input item -> output item -> value.
   // Any future machine can use the same processor path without special-case transport code.
-  function sellBox(market) {
-    state.money += market.sale;
-    state.revenue += market.sale;
+  function sellItem(market, item) {
+    const value = ITEM[item].value;
+    state.money += value;
+    state.revenue += value;
     state.sold++;
-    if (state.revenue === 65 || state.revenue % 1000 < 65) {
-      showMessage("Sold a leek box for $" + market.sale + ".");
+    if (state.revenue < 100 || state.revenue % 1000 < value) {
+      showMessage("Sold " + ITEM[item].label + " for $" + value + ".");
     }
     checkVictory();
   }
@@ -308,10 +308,11 @@
       } else if (def.role === "seller") {
         while (true) {
           const sources = inputSources(b);
-          const source = sources.find(s => s.item === def.input);
+          const source = sources[0];
           if (!source) break;
+          const item = source.item.type;
           source.item = null;
-          sellBox(b);
+          sellItem(b, item);
         }
       }
     }
@@ -391,7 +392,26 @@
     if (b.type === "belt") {
       ctx.fillStyle = "#59625d";
       ctx.fillRect(px + 6, py + 13, TILE - 12, 14);
-      drawArrow(cx, cy, b.dir, .9);
+
+      // Animated belt slats make the conveyor visibly run even when empty.
+      const phase = (performance.now() * 0.055) % 12;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px + 6, py + 13, TILE - 12, 14);
+      ctx.clip();
+      ctx.strokeStyle = "#aab2ac55";
+      ctx.lineWidth = 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(DIRS[b.dir].angle);
+      for (let q = -30; q <= 30; q += 12) {
+        const x = q + phase;
+        ctx.beginPath();
+        ctx.moveTo(x, -7);
+        ctx.lineTo(x + 5, 7);
+        ctx.stroke();
+      }
+      ctx.restore();
+
       if (b.item) {
         const t = Math.max(0, Math.min(1, b.item.t));
         const d = DIRS[b.dir];
@@ -531,7 +551,9 @@
       "🥬 Raw consumed: " + state.processed.leek + "<br>" +
       "✂ Chopped: " + state.processed.chopped + "<br>" +
       "🍲 Stew consumed: " + state.processed.stew + "<br>" +
-      "📦 Boxes sold: " + state.sold + "<br>" +
+      "📦 Items sold: " + state.sold + "<br>" +
+      "💰 Values: raw $" + ITEM.leek.value + " → chopped $" + ITEM.chopped.value +
+      " → stew $" + ITEM.stew.value + " → box $" + ITEM.box.value + "<br>" +
       "⚡ Efficiency: " + state.efficiency.toFixed(2) + "x<br>" +
       "⚙ Machines: " + [...new Set(Object.keys(counts))].map(k => (counts[k] + "× " + BUILDINGS[k].name)).join(", ");
 
