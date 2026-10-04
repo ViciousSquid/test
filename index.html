@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leekworks Tycoon</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div>
+        <h1>Leekworks Tycoon</h1>
+        <p>Build a ridiculous leek-processing factory.</p>
+      </div>
+      <div class="stats">
+        <div><span>Cash</span><strong id="money">$500</strong></div>
+        <div><span>Revenue</span><strong id="revenue">$0</strong></div>
+        <div><span>Goal</span><strong id="goal">$10,000</strong></div>
+        <div><span>Day</span><strong id="day">1</strong></div>
+      </div>
+    </header>
+
+    <section class="game-shell">
+      <canvas id="game" width="1280" height="720" aria-label="Leek factory game"></canvas>
+      <aside class="panel">
+        <div class="panel-section">
+          <h2>Build</h2>
+          <div id="build-menu" class="build-menu"></div>
+        </div>
+        <div class="panel-section">
+          <h2>Factory</h2>
+          <div id="selection">Nothing selected</div>
+        </div>
+        <div class="panel-section help">
+          <h2>Controls</h2>
+          <p><b>1–7</b> select a build tool</p>
+          <p><b>R</b> rotate before placing</p>
+          <p><b>Esc</b> cancel tool</p>
+          <p><b>Space</b> pause / resume</p>
+          <p><b>Right click</b> delete a building or belt</p>
+          <p>Green placement tiles are valid.</p>
+        </div>
+        <div class="panel-section">
+          <h2>Production</h2>
+          <div id="production"></div>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      <span id="status">Plant leeks and get the line moving.</span>
+      <button id="pause" type="button">Pause</button>
+      <button id="reset" type="button">Reset</button>
+    </footer>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
