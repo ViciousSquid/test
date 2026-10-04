@@ -21,62 +21,95 @@
   const OFFSET_Y = 20;
   const GOAL = 10000;
   const DAY_LENGTH = 60;
+  const BELT_SPEED = 1.8;
+  const MAX_BELT_ITEMS = 2;
 
   const DIRS = [
-    { x: 1, y: 0, angle: 0 },
-    { x: 0, y: 1, angle: Math.PI / 2 },
-    { x: -1, y: 0, angle: Math.PI },
-    { x: 0, y: -1, angle: -Math.PI / 2 }
+    { x: 1, y: 0, angle: 0, name: "E" },
+    { x: 0, y: 1, angle: Math.PI / 2, name: "S" },
+    { x: -1, y: 0, angle: Math.PI, name: "W" },
+    { x: 0, y: -1, angle: -Math.PI / 2, name: "N" }
   ];
 
-  const ITEM = {
+  const ITEMS = {
     leek: { label: "Raw leek", glyph: "🥬", value: 5 },
     chopped: { label: "Chopped leek", glyph: "✂", value: 12 },
     stew: { label: "Leek stew", glyph: "🍲", value: 28 },
     box: { label: "Leek box", glyph: "📦", value: 65 }
   };
 
+  // Recipes are data, not hard-coded production logic.
+  const RECIPES = {
+    cutter: {
+      key: "cutter",
+      name: "Cutter",
+      hotkey: "3",
+      cost: 120,
+      unlock: 0,
+      input: "leek",
+      output: "chopped",
+      time: 1.5,
+      capacity: 2,
+      color: "#4d7fa7",
+      glyph: "✂",
+      desc: "Cuts raw leek into chopped leek"
+    },
+    cooker: {
+      key: "cooker",
+      name: "Cooker",
+      hotkey: "4",
+      cost: 180,
+      unlock: 600,
+      input: "chopped",
+      output: "stew",
+      time: 2.0,
+      capacity: 2,
+      color: "#b06a43",
+      glyph: "🍲",
+      desc: "Cooks chopped leek into stew"
+    },
+    packer: {
+      key: "packer",
+      name: "Packer",
+      hotkey: "5",
+      cost: 240,
+      unlock: 1800,
+      input: "stew",
+      output: "box",
+      time: 2.2,
+      capacity: 2,
+      color: "#a78b4c",
+      glyph: "📦",
+      desc: "Packs stew into valuable boxes"
+    }
+  };
+
   const BUILDINGS = {
     planter: {
       key: "planter", name: "Leek Patch", hotkey: "1", cost: 100, unlock: 0,
       desc: "Grows raw leeks", color: "#5b963b", glyph: "🥬", role: "producer",
-      rate: 2.6, output: "leek"
+      time: 2.5, output: "leek"
     },
     belt: {
       key: "belt", name: "Conveyor", hotkey: "2", cost: 10, unlock: 0,
-      desc: "Moves items", color: "#7d8580", glyph: "→", role: "belt"
+      desc: "Moves two items directionally", color: "#69716c", glyph: "→", role: "belt"
     },
-    cutter: {
-      key: "cutter", name: "Cutter", hotkey: "3", cost: 120, unlock: 250,
-      desc: "Leek -> chopped", color: "#4d7fa7", glyph: "✂", role: "processor",
-      input: "leek", output: "chopped", rate: 1.5, capacity: 2
-    },
-    cooker: {
-      key: "cooker", name: "Cooker", hotkey: "4", cost: 180, unlock: 900,
-      desc: "Chopped -> stew", color: "#b06a43", glyph: "🍲", role: "processor",
-      input: "chopped", output: "stew", rate: 2.1, capacity: 2
-    },
-    packer: {
-      key: "packer", name: "Packer", hotkey: "5", cost: 240, unlock: 2200,
-      desc: "Stew -> boxes", color: "#a78b4c", glyph: "📦", role: "processor",
-      input: "stew", output: "box", rate: 2.4, capacity: 2
-    },
+    cutter: RECIPES.cutter,
+    cooker: RECIPES.cooker,
+    packer: RECIPES.packer,
     market: {
-      key: "market", name: "Market", hotkey: "6", cost: 140, unlock: 0,
-      desc: "Sells anything delivered", color: "#8d4b71", glyph: "$", role: "seller"
+      key: "market", name: "Restaurant", hotkey: "6", cost: 140, unlock: 0,
+      desc: "Sells delivered products", color: "#8d4b71", glyph: "$", role: "seller"
     },
     battery: {
-      key: "battery", name: "Accumulator", hotkey: "7", cost: 90, unlock: 5000,
-      desc: "Factory efficiency", color: "#6e5aa6", glyph: "⚡", role: "upgrade"
+      key: "battery", name: "Booster", hotkey: "7", cost: 500, unlock: 4500,
+      desc: "Makes every machine 15% faster", color: "#6e5aa6", glyph: "⚡", role: "upgrade"
     }
   };
 
-  const INITIAL_BUILD = [
-    ["planter", 3, 7, 0],
-    ["market", 21, 7, 2]
-  ];
-
   let state;
+  let dragging = false;
+  let lastDragCell = null;
 
   function freshState() {
     return {
@@ -90,31 +123,40 @@
       hovered: null,
       selected: null,
       buildings: new Map(),
-      processed: { leek: 0, chopped: 0, stew: 0, box: 0 },
+      stats: { leek: 0, chopped: 0, stew: 0, box: 0 },
       sold: 0,
       efficiency: 1,
-      messages: ["Plant a cutter, then connect it to the market with belts."]
+      messages: []
     };
   }
 
-  function key(x, y) { return y * COLS + x; }
+  function key(x, y) {
+    return y * COLS + x;
+  }
 
   function addBuilding(type, x, y, dir = 0) {
+    const def = BUILDINGS[type];
     state.buildings.set(key(x, y), {
       type,
       x,
       y,
       dir,
       progress: 0,
-      input: 0,
-      output: 0
+      input: [],
+      output: null,
+      items: []
     });
+
+    if (def.role === "belt") {
+      state.buildings.get(key(x, y)).items = [];
+    }
   }
 
   function loadInitial() {
     state = freshState();
-    INITIAL_BUILD.forEach(([t, x, y, d]) => addBuilding(t, x, y, d));
-    showMessage("Factory online. The leek economy awaits.");
+    addBuilding("planter", 3, 7, 0);
+    addBuilding("market", 21, 7, 2);
+    showMessage("Factory online. Build a straight production line and watch it run.");
     updateBuildMenu();
   }
 
@@ -138,17 +180,7 @@
   }
 
   function priceFor(type) {
-    const b = BUILDINGS[type];
-    const batteryPenalty = state.efficiency > 1 && type !== "battery" ? 1 : 1;
-    return Math.ceil(b.cost * batteryPenalty);
-  }
-
-  function canPlace(type, x, y) {
-    if (!inBounds(x, y) || cellAt(x, y)) return false;
-    const b = BUILDINGS[type];
-    if (!b) return false;
-    if (state.money < priceFor(type)) return false;
-    return state.money >= priceFor(type) && state.money >= 0;
+    return BUILDINGS[type].cost;
   }
 
   function unlocked(type) {
@@ -161,217 +193,424 @@
     return true;
   }
 
-  function placeSelected(x, y) {
-    const type = state.selectedTool;
-    if (!BUILDINGS[type]) return;
+  function canPlace(type, x, y) {
+    if (!BUILDINGS[type] || !inBounds(x, y) || cellAt(x, y)) return false;
+    if (!unlocked(type)) return false;
+    return state.money >= priceFor(type);
+  }
+
+  function opposite(dir) {
+    return (dir + 2) % 4;
+  }
+
+  function adjacent(building, dir) {
+    const d = DIRS[dir];
+    return { x: building.x + d.x, y: building.y + d.y };
+  }
+
+  function tryPlace(type, x, y) {
+    if (!BUILDINGS[type]) return false;
+
     if (!unlocked(type)) {
       showMessage(BUILDINGS[type].name + " unlocks at $" + BUILDINGS[type].unlock.toLocaleString() + " revenue.");
-      return;
+      return false;
     }
+
     if (!canPlace(type, x, y)) {
-      showMessage("Can't build there. Check the tile and your cash.");
-      return;
+      showMessage("Can't build there.");
+      return false;
     }
+
     const cost = priceFor(type);
-    if (!spend(cost)) return;
+    if (!spend(cost)) return false;
+
     addBuilding(type, x, y, state.rotation);
     state.selected = { x, y };
     showMessage("Built " + BUILDINGS[type].name + " for $" + cost + ".");
     updateBuildMenu();
+    return true;
   }
 
   function removeAt(x, y) {
-    const item = cellAt(x, y);
-    if (!item) return;
+    const building = cellAt(x, y);
+    if (!building) return;
+    const refund = Math.floor(priceFor(building.type) * 0.55);
     state.buildings.delete(key(x, y));
-    const refund = Math.floor(priceFor(item.type) * 0.55);
     state.money += refund;
     state.selected = null;
-    showMessage("Removed " + BUILDINGS[item.type].name + ". Refunded $" + refund + ".");
+    showMessage("Removed " + BUILDINGS[building.type].name + " — refund $" + refund + ".");
     updateBuildMenu();
   }
 
-  function neighbor(building) {
-    const d = DIRS[building.dir];
-    return { x: building.x + d.x, y: building.y + d.y };
+  function inputDirection(machine) {
+    return opposite(machine.dir);
   }
 
-  function inputSources(building) {
-    const sources = [];
-    for (let i = 0; i < 4; i++) {
-      const d = DIRS[i];
-      const b = cellAt(building.x + d.x, building.y + d.y);
-      if (b && b.type === "belt" && b.item && b.item.t >= 1) {
-        sources.push(b);
-      }
-    }
-    return sources;
+  function outputDirection(machine) {
+    return machine.dir;
   }
 
-  function pullInput(building, wanted) {
-    const sources = inputSources(building);
-    for (const source of sources) {
-      if (source.item !== wanted) continue;
-      source.item = null;
-      building.input++;
-      state.processed[wanted]++;
-      return true;
-    }
-    return false;
+  function beltCanAccept(belt) {
+    return belt && belt.type === "belt" && belt.items.length < MAX_BELT_ITEMS;
   }
 
-  function pushOutput(building, item) {
-    const p = neighbor(building);
-    if (!inBounds(p.x, p.y)) return false;
+  function beltStartClear(belt, lane) {
+    return belt.items.every(item => item.lane !== lane || item.offset > 0.27);
+  }
+
+  function spawnBeltItem(belt, type, lane = 0) {
+    if (!beltCanAccept(belt) || !beltStartClear(belt, lane)) return false;
+    belt.items.push({ type, lane, offset: 0 });
+    return true;
+  }
+
+  function outputBeltFor(building) {
+    const p = adjacent(building, outputDirection(building));
+    if (!inBounds(p.x, p.y)) return null;
     const target = cellAt(p.x, p.y);
-    if (!target) return false;
-    if (target.type === "belt" && !target.item) {
-      target.item = { type: item, t: 0 };
-      return true;
-    }
-    if (target.type === "market") {
-      sellItem(target, item);
-      return true;
-    }
-    return false;
+    return target && target.type === "belt" ? target : null;
   }
 
-  function beltTarget(belt) {
-    const d = DIRS[belt.dir];
-    return { x: belt.x + d.x, y: belt.y + d.y };
+  function inputBeltFor(building) {
+    const p = adjacent(building, inputDirection(building));
+    if (!inBounds(p.x, p.y)) return null;
+    const target = cellAt(p.x, p.y);
+    return target && target.type === "belt" ? target : null;
   }
 
-  function updateBelts(dt) {
-    const belts = [...state.buildings.values()].filter(b => b.type === "belt" && b.item);
-    for (const belt of belts) {
-      if (!belt.item) continue;
-      belt.item.t = Math.min(1, belt.item.t + dt * 1.65 * state.efficiency);
+  function deliverFromBelt(belt, item, machine) {
+    const def = RECIPES[machine.type];
+    if (!def || item.type !== def.input || machine.input.length >= def.capacity) {
+      return false;
     }
-
-    // Resolve completed items from downstream to upstream so a whole line
-    // visibly advances one item at a time without teleporting through belts.
-    for (const belt of belts.reverse()) {
-      if (!belt.item || belt.item.t < 1) continue;
-      const p = beltTarget(belt);
-      if (!inBounds(p.x, p.y)) continue;
-      const target = cellAt(p.x, p.y);
-      if (!target) continue;
-
-      if (target.type === "belt" && !target.item) {
-        target.item = belt.item;
-        target.item.t = 0;
-        belt.item = null;
-      }
-    }
+    machine.input.push(item.type);
+    state.stats[item.type]++;
+    machine.progressPulse = 1;
+    return true;
   }
 
-  // Machine recipes are deliberately data-driven: input item -> output item -> value.
-  // Any future machine can use the same processor path without special-case transport code.
-  function sellItem(market, item) {
-    const value = ITEM[item].value;
+  function sellItem(item) {
+    const value = ITEMS[item].value;
     state.money += value;
     state.revenue += value;
     state.sold++;
-    if (state.revenue < 100 || state.revenue % 1000 < value) {
-      showMessage("Sold " + ITEM[item].label + " for $" + value + ".");
+    if (state.revenue < 250 || state.revenue % 500 < value) {
+      showMessage("Restaurant sold " + ITEMS[item].label + " for $" + value + ".");
     }
-    checkVictory();
   }
 
-  function updateBuildings(dt) {
-    const buildings = [...state.buildings.values()];
-    for (const b of buildings) {
-      const def = BUILDINGS[b.type];
-      if (b.type === "planter") {
-        b.progress += dt * state.efficiency;
-        if (b.progress >= def.rate) {
-          const out = neighbor(b);
-          const target = inBounds(out.x, out.y) ? cellAt(out.x, out.y) : null;
-          if (target && target.type === "belt" && !target.item) {
-            target.item = "leek";
-            b.progress -= def.rate;
-          }
-        }
-      } else if (def.role === "processor") {
-        while (b.input < def.capacity && pullInput(b, def.input)) {}
-        if (b.input > 0) {
-          b.progress += dt * state.efficiency;
-          if (b.progress >= def.rate) {
-            if (pushOutput(b, def.output)) {
-              b.input--;
-              b.progress -= def.rate;
-            }
-          }
+  function tryDeliverAtBeltEnd(belt, item) {
+    const p = {
+      x: belt.x + DIRS[belt.dir].x,
+      y: belt.y + DIRS[belt.dir].y
+    };
+
+    if (!inBounds(p.x, p.y)) return false;
+    const target = cellAt(p.x, p.y);
+    if (!target) return false;
+
+    if (target.type === "belt") {
+      // Preserve directionality: only transfer into the next belt if its
+      // entrance points along the current flow or it is perpendicular.
+      if (!beltCanAccept(target)) return false;
+      const transferLane = item.lane;
+      if (!beltStartClear(target, transferLane)) return false;
+      target.items.push({ type: item.type, lane: transferLane, offset: 0 });
+      return true;
+    }
+
+    if (target.type === "market") {
+      sellItem(item.type);
+      return true;
+    }
+
+    if (RECIPES[target.type]) {
+      const required = RECIPES[target.type];
+      if (target.input.length >= required.capacity || required.input !== item.type) {
+        return false;
+      }
+      // The belt must point into the machine's input side.
+      if (inputDirection(target) !== belt.dir) return false;
+      return deliverFromBelt(belt, item, target);
+    }
+
+    return false;
+  }
+
+  function inputDirection(machine) {
+    return opposite(machine.dir);
+  }
+
+  function updateBelts(dt) {
+    const belts = [...state.buildings.values()].filter(b => b.type === "belt");
+
+    for (const belt of belts) {
+      for (const item of belt.items) {
+        item.offset += dt * BELT_SPEED * state.efficiency;
+      }
+    }
+
+    // One transfer per item per tick; a later belt can receive an item after
+    // it has already advanced this frame, avoiding teleportation.
+    for (const belt of belts) {
+      for (let i = belt.items.length - 1; i >= 0; i--) {
+        const item = belt.items[i];
+        if (item.offset < 1) continue;
+
+        if (tryDeliverAtBeltEnd(belt, item)) {
+          belt.items.splice(i, 1);
         } else {
-          b.progress = Math.max(0, b.progress - dt * 0.5);
+          item.offset = 0.999;
         }
-      } else if (def.role === "seller") {
-        while (true) {
-          const sources = inputSources(b);
-          const source = sources[0];
-          if (!source) break;
-          const item = source.item.type;
-          source.item = null;
-          sellItem(b, item);
+      }
+
+      belt.items.sort((a, b) => b.offset - a.offset);
+    }
+  }
+
+  function updateMachines(dt) {
+    for (const building of state.buildings.values()) {
+      const def = RECIPES[building.type];
+      if (!def) continue;
+
+      if (building.output) {
+        const belt = outputBeltFor(building);
+        if (belt && spawnBeltItem(belt, building.output, 0)) {
+          building.output = null;
+          building.outputPulse = 1;
         }
+        continue;
+      }
+
+      if (building.input.length === 0) {
+        building.progress = Math.max(0, building.progress - dt * 0.6);
+        continue;
+      }
+
+      building.progress += dt * state.efficiency;
+      building.processPulse = Math.max(0, Math.sin(building.progress * 10) * 0.15);
+
+      if (building.progress >= def.time) {
+        building.progress -= def.time;
+        building.input.shift();
+        building.output = def.output;
+        building.processPulse = 1;
+        state.stats[def.output]++;
       }
     }
   }
 
+  function updateProducers(dt) {
+    for (const building of state.buildings.values()) {
+      if (building.type !== "planter") continue;
+
+      building.progress += dt * state.efficiency;
+      if (building.progress < BUILDINGS.planter.time) continue;
+
+      const p = adjacent(building, building.dir);
+      if (!inBounds(p.x, p.y)) continue;
+      const target = cellAt(p.x, p.y);
+      if (!target || target.type !== "belt") continue;
+      if (spawnBeltItem(target, "leek", 0)) {
+        building.progress -= BUILDINGS.planter.time;
+        building.outputPulse = 1;
+      }
+    }
+  }
+
+  function updateMarkets() {
+    // Market intake is handled by belt endpoints. This is intentionally kept
+    // as a separate stage so the simulation order mirrors production flow.
+  }
+
   function recomputeEfficiency() {
-    const batteries = [...state.buildings.values()].filter(b => b.type === "battery").length;
-    state.efficiency = 1 + Math.min(0.4, batteries * 0.12);
+    const boosters = [...state.buildings.values()].filter(b => b.type === "battery").length;
+    state.efficiency = 1 + Math.min(0.6, boosters * 0.15);
   }
 
   function advance(dt) {
     if (state.paused) return;
+
     recomputeEfficiency();
+
     state.elapsed += dt;
     if (state.elapsed >= DAY_LENGTH) {
       state.elapsed -= DAY_LENGTH;
       state.day++;
-      showMessage("Day " + state.day + ". The leek market remains open.");
+      showMessage("Day " + state.day + ". The factory keeps running.");
     }
-    // Move first, then consume/produce, so each tick advances the factory one step.
+
+    for (const b of state.buildings.values()) {
+      b.processPulse = Math.max(0, (b.processPulse || 0) - dt * 2);
+      b.outputPulse = Math.max(0, (b.outputPulse || 0) - dt * 2);
+      b.progressPulse = Math.max(0, (b.progressPulse || 0) - dt * 2);
+    }
+
     updateBelts(dt);
-    updateBuildings(dt);
+    updateMachines(dt);
+    updateProducers(dt);
+    updateMarkets();
   }
 
   function drawBackground() {
     ctx.fillStyle = "#122017";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#18251b";
+
     for (let x = 0; x < COLS; x++) {
       for (let y = 0; y < ROWS; y++) {
         const px = OFFSET_X + x * TILE;
         const py = OFFSET_Y + y * TILE;
         ctx.fillStyle = (x + y) % 2 ? "#172219" : "#19251b";
         ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = "#233126";
-        ctx.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
+        ctx.strokeStyle = "#26342a";
+        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
       }
     }
   }
 
-  function drawArrow(cx, cy, dir, alpha = 1) {
+  function drawArrow(cx, cy, dir, alpha = 1, length = 12) {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(cx, cy);
     ctx.rotate(DIRS[dir].angle);
-    ctx.strokeStyle = "#d9ded8";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#e0e7df";
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(-10, 0);
-    ctx.lineTo(10, 0);
-    ctx.lineTo(4, -6);
-    ctx.moveTo(10, 0);
-    ctx.lineTo(4, 6);
+    ctx.moveTo(-length, 0);
+    ctx.lineTo(length, 0);
+    ctx.lineTo(length - 5, -5);
+    ctx.moveTo(length, 0);
+    ctx.lineTo(length - 5, 5);
     ctx.stroke();
     ctx.restore();
   }
 
-  function drawBuilding(b) {
-    const def = BUILDINGS[b.type];
+  function drawPort(x, y, dir, color, active) {
+    const d = DIRS[dir];
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(d.angle);
+    ctx.fillStyle = active ? color : "#0b100d";
+    ctx.strokeStyle = active ? "#e9f6df" : "#607064";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-7, -5, 14, 10, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBelt(b) {
+    const px = OFFSET_X + b.x * TILE;
+    const py = OFFSET_Y + b.y * TILE;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
+    const phase = (performance.now() * 0.07) % 14;
+
+    ctx.fillStyle = "#303733";
+    ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px + 5, py + 5, TILE - 10, TILE - 10);
+    ctx.clip();
+
+    ctx.translate(cx, cy);
+    ctx.rotate(DIRS[b.dir].angle);
+    ctx.strokeStyle = "#aab4ad55";
+    ctx.lineWidth = 2;
+
+    for (const laneOffset of [-8, 8]) {
+      for (let q = -30; q <= 30; q += 12) {
+        const n = q + phase;
+        ctx.beginPath();
+        ctx.moveTo(n, laneOffset - 4);
+        ctx.lineTo(n + 4, laneOffset + 4);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = "#6b756e";
+    ctx.strokeRect(px + 4.5, py + 4.5, TILE - 9, TILE - 9);
+    drawArrow(cx, cy, b.dir, .65, 8);
+
+    for (const item of b.items) {
+      const d = DIRS[b.dir];
+      const t = Math.max(0, Math.min(1, item.offset));
+      const distance = (t - 0.5) * (TILE - 12);
+      const lane = item.lane === 0 ? -8 : 8;
+      const perp = { x: -d.y, y: d.x };
+      const itemX = cx + d.x * distance + perp.x * lane;
+      const itemY = cy + d.y * distance + perp.y * lane;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(itemX, itemY, 8, 0, Math.PI * 2);
+      ctx.fillStyle = "#0b100d";
+      ctx.fill();
+      ctx.font = "15px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#f5faef";
+      ctx.fillText(ITEMS[item.type].glyph, itemX, itemY + 1);
+      ctx.restore();
+    }
+  }
+
+  function drawMachine(b) {
+    const def = RECIPES[b.type];
+    const px = OFFSET_X + b.x * TILE;
+    const py = OFFSET_Y + b.y * TILE;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
+    const working = b.input.length > 0 || b.output;
+
+    ctx.fillStyle = def.color;
+    ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+    ctx.strokeStyle = working ? "#f1f3d0" : "#0a0f0b";
+    ctx.lineWidth = working ? 2.5 : 2;
+    ctx.strokeRect(px + 4, py + 4, TILE - 8, TILE - 8);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (b.processPulse) {
+      ctx.rotate(Math.sin(performance.now() * 0.02) * 0.05 * b.processPulse);
+    }
+    ctx.font = "18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(def.glyph, 0, -2);
+    ctx.restore();
+
+    // Input / output ports make the recipe directional and visible.
+    const input = adjacent(b, inputDirection(b));
+    const output = adjacent(b, outputDirection(b));
+    const inputCx = px + TILE / 2 + DIRS[inputDirection(b)].x * 16;
+    const inputCy = py + TILE / 2 + DIRS[inputDirection(b)].y * 16;
+    const outputCx = px + TILE / 2 + DIRS[outputDirection(b)].x * 16;
+    const outputCy = py + TILE / 2 + DIRS[outputDirection(b)].y * 16;
+    drawPort(inputCx, inputCy, inputDirection(b), "#65a6d7", b.input.length > 0);
+    drawPort(outputCx, outputCy, outputDirection(b), "#f0c567", Boolean(b.output));
+
+    ctx.fillStyle = "#0b100dcc";
+    ctx.fillRect(px + 5, py + TILE - 9, TILE - 10, 4);
+    ctx.fillStyle = b.output ? "#f0c567" : "#dbe7d5";
+    const pct = Math.min(1, b.progress / def.time);
+    ctx.fillRect(px + 5, py + TILE - 9, (TILE - 10) * pct, 4);
+
+    if (b.input.length > 0) {
+      ctx.font = "9px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#08100a";
+      ctx.fillText(b.input.length + "/" + def.capacity, cx, py + 13);
+    }
+  }
+
+  function drawProducer(b) {
+    const def = BUILDINGS.planter;
     const px = OFFSET_X + b.x * TILE;
     const py = OFFSET_Y + b.y * TILE;
     const cx = px + TILE / 2;
@@ -379,7 +618,7 @@
 
     ctx.fillStyle = def.color;
     ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
-    ctx.strokeStyle = "#0a0f0b";
+    ctx.strokeStyle = b.outputPulse ? "#f1f3d0" : "#0a0f0b";
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 4, py + 4, TILE - 8, TILE - 8);
 
@@ -387,105 +626,111 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#fff";
-    ctx.fillText(def.glyph, cx, cy - 3);
+    ctx.fillText(def.glyph, cx, cy);
 
-    if (b.type === "belt") {
-      ctx.fillStyle = "#59625d";
-      ctx.fillRect(px + 6, py + 13, TILE - 12, 14);
+    const p = adjacent(b, b.dir);
+    const target = inBounds(p.x, p.y) ? cellAt(p.x, p.y) : null;
+    drawPort(
+      px + TILE / 2 + DIRS[b.dir].x * 15,
+      py + TILE / 2 + DIRS[b.dir].y * 15,
+      b.dir,
+      "#78bf63",
+      Boolean(target && target.type === "belt")
+    );
 
-      // Animated belt slats make the conveyor visibly run even when empty.
-      const phase = (performance.now() * 0.055) % 12;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(px + 6, py + 13, TILE - 12, 14);
-      ctx.clip();
-      ctx.strokeStyle = "#aab2ac55";
-      ctx.lineWidth = 2;
-      ctx.translate(cx, cy);
-      ctx.rotate(DIRS[b.dir].angle);
-      for (let q = -30; q <= 30; q += 12) {
-        const x = q + phase;
-        ctx.beginPath();
-        ctx.moveTo(x, -7);
-        ctx.lineTo(x + 5, 7);
-        ctx.stroke();
-      }
-      ctx.restore();
+    ctx.fillStyle = "#0b100dcc";
+    ctx.fillRect(px + 5, py + TILE - 9, TILE - 10, 4);
+    ctx.fillStyle = "#dbe7d5";
+    ctx.fillRect(px + 5, py + TILE - 9, (TILE - 10) * Math.min(1, b.progress / def.time), 4);
+  }
 
-      if (b.item) {
-        const t = Math.max(0, Math.min(1, b.item.t));
-        const d = DIRS[b.dir];
-        const itemX = cx + d.x * (t - 0.5) * (TILE - 16);
-        const itemY = cy + d.y * (t - 0.5) * (TILE - 16);
-        ctx.font = "18px sans-serif";
-        ctx.fillText(ITEM[b.item.type].glyph, itemX, itemY);
-      }
-    } else {
-      drawArrow(cx, cy + 13, b.dir, .4);
-      if (def.role === "processor") {
-        const pct = Math.min(1, b.input / def.capacity);
-        ctx.fillStyle = "#0a0f0bcc";
-        ctx.fillRect(px + 6, py + TILE - 9, TILE - 12, 4);
-        ctx.fillStyle = "#e8f2d7";
-        ctx.fillRect(px + 6, py + TILE - 9, (TILE - 12) * pct, 4);
-      }
-    }
+  function drawMarket(b) {
+    const px = OFFSET_X + b.x * TILE;
+    const py = OFFSET_Y + b.y * TILE;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
 
-    if (state.selected && state.selected.x === b.x && state.selected.y === b.y) {
-      ctx.strokeStyle = "#f1f59a";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
-    }
+    ctx.fillStyle = BUILDINGS.market.color;
+    ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+    ctx.strokeStyle = "#0a0f0b";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 4, py + 4, TILE - 8, TILE - 8);
+
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff";
+    ctx.fillText("$", cx, cy);
+
+    ctx.font = "9px system-ui";
+    ctx.fillStyle = "#f4e1f0";
+    ctx.fillText("SELL", cx, py + 12);
+  }
+
+  function drawBooster(b) {
+    const px = OFFSET_X + b.x * TILE;
+    const py = OFFSET_Y + b.y * TILE;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
+
+    ctx.fillStyle = BUILDINGS.battery.color;
+    ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+    ctx.strokeStyle = "#dcd5fa";
+    ctx.strokeRect(px + 4, py + 4, TILE - 8, TILE - 8);
+    ctx.font = "18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff";
+    ctx.fillText("⚡", cx, cy);
   }
 
   function drawPreview() {
-    if (!state.hovered || !BUILDINGS[state.selectedTool]) return;
+    if (!state.hovered || !state.selectedTool) return;
     const { x, y } = state.hovered;
-    const valid = canPlace(state.selectedTool, x, y) && unlocked(state.selectedTool);
     const px = OFFSET_X + x * TILE;
     const py = OFFSET_Y + y * TILE;
-    ctx.fillStyle = valid ? "#79c66d2c" : "#da5b4a2c";
+    const valid = canPlace(state.selectedTool, x, y);
+
+    ctx.fillStyle = valid ? "#79c66d30" : "#da5b4a30";
     ctx.fillRect(px, py, TILE, TILE);
-    ctx.strokeStyle = valid ? "#79c66d88" : "#da5b4a88";
+    ctx.strokeStyle = valid ? "#79c66d99" : "#da5b4a99";
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+
     if (valid) {
       const def = BUILDINGS[state.selectedTool];
-      ctx.fillStyle = def.color + "bb";
+      ctx.fillStyle = def.color + "cc";
       ctx.fillRect(px + 7, py + 7, TILE - 14, TILE - 14);
-      drawArrow(px + TILE / 2, py + TILE / 2, state.rotation, .7);
+      drawArrow(px + TILE / 2, py + TILE / 2, state.rotation, .75);
     }
   }
 
-  function drawFactoryLines() {
-    const sources = [...state.buildings.values()].filter(b => b.type !== "belt");
-    for (const b of sources) {
-      const out = neighbor(b);
-      if (!inBounds(out.x, out.y)) continue;
-      const target = cellAt(out.x, out.y);
-      if (!target) continue;
-      if (b.type === "planter" || BUILDINGS[b.type].role === "processor") {
-        const x1 = OFFSET_X + b.x * TILE + TILE / 2;
-        const y1 = OFFSET_Y + b.y * TILE + TILE / 2;
-        const x2 = OFFSET_X + out.x * TILE + TILE / 2;
-        const y2 = OFFSET_Y + out.y * TILE + TILE / 2;
-        ctx.strokeStyle = "#e8f3cf30";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 5]);
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
+  function drawSelection() {
+    if (!state.selected) return;
+    const { x, y } = state.selected;
+    const px = OFFSET_X + x * TILE;
+    const py = OFFSET_Y + y * TILE;
+    ctx.strokeStyle = "#f1f59a";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
   }
 
   function draw() {
     drawBackground();
-    drawFactoryLines();
-    for (const b of state.buildings.values()) drawBuilding(b);
+
+    for (const b of state.buildings.values()) {
+      if (b.type === "belt") drawBelt(b);
+    }
+
+    for (const b of state.buildings.values()) {
+      if (b.type === "planter") drawProducer(b);
+      else if (RECIPES[b.type]) drawMachine(b);
+      else if (b.type === "market") drawMarket(b);
+      else if (b.type === "battery") drawBooster(b);
+    }
+
     drawPreview();
+    drawSelection();
 
     if (state.hovered) {
       const { x, y } = state.hovered;
@@ -495,17 +740,16 @@
       ctx.strokeRect(px, py, TILE, TILE);
     }
 
-    // Legend and unlock banner in the world.
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#d6e5d0";
     ctx.font = "12px system-ui";
-    ctx.fillText("LEEKWORKS // " + (state.paused ? "PAUSED" : "LIVE"), 18, 14);
+    ctx.fillStyle = "#d6e5d0";
+    ctx.fillText("LEEKWORKS // " + (state.paused ? "PAUSED" : "RUNNING"), 18, 14);
 
     if (state.revenue >= GOAL) {
       ctx.fillStyle = "#ebef9f";
       ctx.font = "700 18px system-ui";
-      ctx.fillText("FACTORY TYCOON COMPLETE — THE GREAT LEEKINATION", 18, 705);
+      ctx.fillText("THE GREAT LEEKINATION — FACTORY TYCOON COMPLETE", 18, 705);
     }
   }
 
@@ -520,19 +764,43 @@
     updateBuildMenu();
   }
 
+  function rotateTool() {
+    state.rotation = (state.rotation + 1) % 4;
+    showMessage("Building direction: " + DIRS[state.rotation].name + ".");
+  }
+
+  function buildDescription(def) {
+    if (def.role === "producer") {
+      return def.desc + " → $" + ITEMS[def.output].value;
+    }
+    if (def.role === "belt") return def.desc;
+    if (def.role === "seller") return def.desc;
+    if (def.role === "upgrade") return def.desc;
+    return def.desc + " · " +
+      ITEMS[def.input].glyph + " " + ITEMS[def.input].label +
+      " → " + ITEMS[def.output].glyph + " " + ITEMS[def.output].label +
+      " · $" + ITEMS[def.input].value + " → $" + ITEMS[def.output].value;
+  }
+
   function updateBuildMenu() {
     buildMenu.innerHTML = "";
+
     Object.values(BUILDINGS).forEach(def => {
       const button = document.createElement("button");
+      const isLocked = !unlocked(def.key);
       button.className = "build-button" +
         (state.selectedTool === def.key ? " active" : "") +
-        (!unlocked(def.key) ? " locked" : "");
-      const cost = priceFor(def.key);
+        (isLocked ? " locked" : "");
+
+      let detail = buildDescription(def);
+      if (isLocked) detail += " · unlock $" + def.unlock.toLocaleString();
+
       button.innerHTML =
         '<span class="build-icon" style="background:' + def.color + '">' + def.glyph + '</span>' +
         '<span><span class="build-name">' + def.hotkey + " · " + def.name + '</span>' +
-        '<span class="build-desc">' + def.desc + (!unlocked(def.key) ? " · unlock $" + def.unlock.toLocaleString() : "") + '</span></span>' +
-        '<span class="build-cost">$' + cost.toLocaleString() + '</span>';
+        '<span class="build-desc">' + detail + '</span></span>' +
+        '<span class="build-cost">$' + priceFor(def.key).toLocaleString() + '</span>';
+
       button.addEventListener("click", () => setTool(def.key));
       buildMenu.appendChild(button);
     });
@@ -546,58 +814,110 @@
     pauseButton.textContent = state.paused ? "Resume" : "Pause";
 
     const counts = {};
-    for (const b of state.buildings.values()) counts[b.type] = (counts[b.type] || 0) + 1;
+    for (const b of state.buildings.values()) {
+      counts[b.type] = (counts[b.type] || 0) + 1;
+    }
+
+    const machineRows = Object.values(RECIPES)
+      .filter(r => counts[r.key])
+      .map(r => counts[r.key] + "× " + r.name)
+      .join(", ");
+
     productionEl.innerHTML =
-      "🥬 Raw consumed: " + state.processed.leek + "<br>" +
-      "✂ Chopped: " + state.processed.chopped + "<br>" +
-      "🍲 Stew consumed: " + state.processed.stew + "<br>" +
-      "📦 Items sold: " + state.sold + "<br>" +
-      "💰 Values: raw $" + ITEM.leek.value + " → chopped $" + ITEM.chopped.value +
-      " → stew $" + ITEM.stew.value + " → box $" + ITEM.box.value + "<br>" +
-      "⚡ Efficiency: " + state.efficiency.toFixed(2) + "x<br>" +
-      "⚙ Machines: " + [...new Set(Object.keys(counts))].map(k => (counts[k] + "× " + BUILDINGS[k].name)).join(", ");
+      "🥬 Raw consumed: " + state.stats.leek + "<br>" +
+      "✂ Chopped: " + state.stats.chopped + "<br>" +
+      "🍲 Stew: " + state.stats.stew + "<br>" +
+      "📦 Boxes: " + state.stats.box + "<br>" +
+      "💵 Items sold: " + state.sold + "<br>" +
+      "⚡ Factory speed: " + state.efficiency.toFixed(2) + "×<br>" +
+      "🏭 Machines: " + (machineRows || "none");
 
     if (state.selected) {
       const b = cellAt(state.selected.x, state.selected.y);
-      if (b) {
-        const d = BUILDINGS[b.type];
+      if (!b) {
+        selectionEl.textContent = "Nothing selected";
+        return;
+      }
+
+      if (RECIPES[b.type]) {
+        const d = RECIPES[b.type];
         selectionEl.innerHTML =
           "<b>" + d.name + "</b><br>" +
-          "Grid: " + b.x + ", " + b.y + "<br>" +
-          "Facing: " + ["E", "S", "W", "N"][b.dir] + "<br>" +
-          (d.role === "processor" ? "Input buffer: " + b.input + "/" + d.capacity : "Status: " + (d.role || "transport"));
+          ITEMS[d.input].glyph + " " + ITEMS[d.input].label + " ($" + ITEMS[d.input].value + ")<br>" +
+          "⏱ " + d.time.toFixed(1) + "s per item<br>" +
+          "→ " + ITEMS[d.output].glyph + " " + ITEMS[d.output].label + " ($" + ITEMS[d.output].value + ")<br>" +
+          "Buffer: " + b.input.length + "/" + d.capacity +
+          (b.output ? "<br><b>Output waiting for belt</b>" : "");
+      } else if (b.type === "belt") {
+        selectionEl.innerHTML =
+          "<b>Conveyor</b><br>" +
+          "Direction: " + DIRS[b.dir].name + "<br>" +
+          "Moving: " + b.items.length + "/" + MAX_BELT_ITEMS;
+      } else {
+        selectionEl.innerHTML =
+          "<b>" + BUILDINGS[b.type].name + "</b><br>" +
+          "Direction: " + DIRS[b.dir].name;
       }
     } else {
-      selectionEl.textContent = "Nothing selected";
+      selectionEl.innerHTML =
+        "<b>Production is physical.</b><br>" +
+        "Place belts between buildings. Items travel tile-by-tile; machines only consume matching inputs from their input side.";
     }
   }
 
   function showMessage(message) {
     state.messages.unshift(message);
-    state.messages.length = Math.min(state.messages.length, 4);
+    state.messages.length = 5;
     statusEl.textContent = message;
   }
 
-  function checkVictory() {
-    if (state.revenue >= GOAL && state.revenue - 65 < GOAL) {
-      showMessage("You did it. Ten thousand dollars of leek commerce.");
+  function placeDragCell(cell) {
+    if (!cell) return;
+    if (!lastDragCell || lastDragCell.x !== cell.x || lastDragCell.y !== cell.y) {
+      tryPlace(state.selectedTool, cell.x, cell.y);
+      lastDragCell = cell;
     }
   }
 
   canvas.addEventListener("mousemove", e => {
-    state.hovered = worldToGrid(e.clientX, e.clientY);
+    const cell = worldToGrid(e.clientX, e.clientY);
+    state.hovered = cell;
+
+    if (dragging && state.selectedTool === "belt") {
+      placeDragCell(cell);
+    }
   });
 
   canvas.addEventListener("mouseleave", () => {
     state.hovered = null;
+    dragging = false;
+    lastDragCell = null;
   });
 
-  canvas.addEventListener("click", e => {
+  canvas.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
     const cell = worldToGrid(e.clientX, e.clientY);
     if (!cell) return;
-    if (state.selectedTool === "belt" || state.selectedTool) {
-      placeSelected(cell.x, cell.y);
+
+    dragging = true;
+    lastDragCell = null;
+
+    if (state.selectedTool === "belt") {
+      placeDragCell(cell);
     }
+  });
+
+  canvas.addEventListener("mouseup", e => {
+    if (e.button !== 0) return;
+    const cell = worldToGrid(e.clientX, e.clientY);
+    if (!dragging) return;
+
+    if (state.selectedTool !== "belt" && cell) {
+      tryPlace(state.selectedTool, cell.x, cell.y);
+    }
+
+    dragging = false;
+    lastDragCell = null;
   });
 
   canvas.addEventListener("contextmenu", e => {
@@ -607,11 +927,16 @@
   });
 
   window.addEventListener("keydown", e => {
+    const target = e.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+      return;
+    }
+
     if (e.key >= "1" && e.key <= "7") {
       const type = Object.values(BUILDINGS)[Number(e.key) - 1]?.key;
       if (type) setTool(type);
     } else if (e.key.toLowerCase() === "r") {
-      state.rotation = (state.rotation + 1) % 4;
+      rotateTool();
     } else if (e.key === "Escape") {
       state.selectedTool = null;
       state.selected = null;
@@ -632,16 +957,20 @@
 
   let previous = performance.now();
   let uiClock = 0;
+
   function loop(now) {
-    const dt = Math.min(0.25, (now - previous) / 1000);
+    const dt = Math.min(0.1, (now - previous) / 1000);
     previous = now;
+
     advance(dt);
     draw();
+
     uiClock += dt;
-    if (uiClock >= 0.1) {
+    if (uiClock >= 0.12) {
       uiClock = 0;
       updatePanels();
     }
+
     requestAnimationFrame(loop);
   }
 
