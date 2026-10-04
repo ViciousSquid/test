@@ -309,8 +309,14 @@
     }
   }
 
+  function recomputeEfficiency() {
+    const batteries = [...state.buildings.values()].filter(b => b.type === "battery").length;
+    state.efficiency = 1 + Math.min(0.4, batteries * 0.12);
+  }
+
   function advance(dt) {
     if (state.paused) return;
+    recomputeEfficiency();
     state.elapsed += dt;
     if (state.elapsed >= DAY_LENGTH) {
       state.elapsed -= DAY_LENGTH;
@@ -510,10 +516,11 @@
     const counts = {};
     for (const b of state.buildings.values()) counts[b.type] = (counts[b.type] || 0) + 1;
     productionEl.innerHTML =
-      "🥬 Raw: " + state.processed.leek + "<br>" +
+      "🥬 Raw consumed: " + state.processed.leek + "<br>" +
       "✂ Chopped: " + state.processed.chopped + "<br>" +
-      "🍲 Stew: " + state.processed.stew + "<br>" +
+      "🍲 Stew consumed: " + state.processed.stew + "<br>" +
       "📦 Boxes sold: " + state.sold + "<br>" +
+      "⚡ Efficiency: " + state.efficiency.toFixed(2) + "x<br>" +
       "⚙ Machines: " + [...new Set(Object.keys(counts))].map(k => (counts[k] + "× " + BUILDINGS[k].name)).join(", ");
 
     if (state.selected) {
