@@ -10,7 +10,7 @@ The production chain is:
 
 `Leek Patch -> Cutter -> Cooker -> Packer -> Market`
 
-Belts move material between machines. Sell packaged leek meals to earn cash and unlock the later machines.
+Belts are animated and each item visibly travels from tile to tile. Machines are recipe-driven: they accept one item and produce another with a higher sale value. The market can sell any delivered item, so you can expand the chain incrementally rather than waiting for one hard-coded product.
 
 ### Controls
 
