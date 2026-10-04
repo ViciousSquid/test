@@ -32,10 +32,11 @@
   ];
 
   const ITEMS = {
-    leek: { label: "Leek box", glyph: "📦", value: 5 },
+    leek: { label: "Raw leek", glyph: "🥬", value: 5 },
     chopped: { label: "Chopped leek", glyph: "✂", value: 12 },
     stew: { label: "Leek stew", glyph: "🍲", value: 28 },
-    box: { label: "Leek box", glyph: "📦", value: 65 }
+    box: { label: "Leek box", glyph: "📦", value: 65 },
+    crate: { label: "Export crate", glyph: "🧰", value: 110 }
   };
 
   // Recipes are data, not hard-coded production logic.
@@ -86,8 +87,8 @@
 
   const BUILDINGS = {
     planter: {
-      key: "planter", name: "Leek Box Source", hotkey: "1", cost: 100, unlock: 0,
-      desc: "Produces leek boxes", color: "#5b963b", glyph: "🥬", role: "producer",
+      key: "planter", name: "Leek Patch", hotkey: "1", cost: 100, unlock: 0,
+      desc: "Grows raw leeks", color: "#5b963b", glyph: "🥬", role: "producer",
       time: 2.5, output: "leek"
     },
     belt: {
@@ -452,17 +453,46 @@
     updateMarkets();
   }
 
-  function drawBackground() {
-    ctx.fillStyle = "#122017";
+  function drawWarehouseEnvironment() {
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  for (let x = 0; x < canvas.width; x += 160) {
+    ctx.fillStyle = "#34443a"; ctx.fillRect(x, 0, 5, canvas.height);
+    ctx.fillStyle = "#66746a"; ctx.fillRect(x + 5, 0, 2, canvas.height);
+  }
+  for (let y = 55; y < canvas.height; y += 120) {
+    ctx.fillStyle = "#344139"; ctx.fillRect(0, y, canvas.width, 4);
+  }
+  for (let i = 0; i < 4; i++) {
+    const x = 35 + i * 310;
+    ctx.fillStyle = "#0b120e"; ctx.fillRect(x, 3, 90, 13);
+    ctx.strokeStyle = "#758278"; ctx.strokeRect(x + .5, 3.5, 89, 12);
+    for (let p = 0; p < 4; p++) {
+      ctx.fillStyle = "#9b7748"; ctx.fillRect(x + 8 + p * 18, 6, 13, 7);
+    }
+  }
+  ctx.restore();
+}
+
+function drawMachineGlow(b, color) {
+  const x = OFFSET_X + b.x * TILE + TILE / 2;
+  const y = OFFSET_Y + b.y * TILE + TILE / 2;
+  const g = ctx.createRadialGradient(x, y, 2, x, y, 30);
+  g.addColorStop(0, color + "40"); g.addColorStop(1, color + "00");
+  ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60);
+}
+
+function drawBackground() {
+    ctx.fillStyle = "#202620";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     for (let x = 0; x < COLS; x++) {
       for (let y = 0; y < ROWS; y++) {
         const px = OFFSET_X + x * TILE;
         const py = OFFSET_Y + y * TILE;
-        ctx.fillStyle = (x + y) % 2 ? "#172219" : "#19251b";
+        ctx.fillStyle = (x + y) % 2 ? "#252b26" : "#292f29";
         ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = "#26342a";
+        ctx.strokeStyle = "#3c463e";
         ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
       }
     }
@@ -507,7 +537,7 @@
     const cy = py + TILE / 2;
     const phase = (performance.now() * 0.07) % 14;
 
-    ctx.fillStyle = "#303733";
+    ctx.fillStyle = "#3b403c";
     ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
 
     ctx.save();
@@ -531,7 +561,7 @@
     }
     ctx.restore();
 
-    ctx.strokeStyle = "#6b756e";
+    ctx.strokeStyle = "#858d87";
     ctx.strokeRect(px + 4.5, py + 4.5, TILE - 9, TILE - 9);
     drawArrow(cx, cy, b.dir, .65, 8);
 
@@ -582,6 +612,7 @@
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#fff";
     ctx.fillText(def.glyph, 0, -2);
+    if (active) drawMachineGlow(b, def.color);
     ctx.restore();
 
     // Input / output ports make the recipe directional and visible.
@@ -717,6 +748,7 @@
 
   function draw() {
     drawBackground();
+    drawWarehouseEnvironment();
 
     for (const b of state.buildings.values()) {
       if (b.type === "belt") drawBelt(b);
@@ -744,7 +776,7 @@
     ctx.textBaseline = "alphabetic";
     ctx.font = "12px system-ui";
     ctx.fillStyle = "#d6e5d0";
-    ctx.fillText("LEEKWORKS // " + (state.paused ? "PAUSED" : "RUNNING"), 18, 14);
+    ctx.fillText("LEEKWORKS // NORTH WAREHOUSE // " + (state.paused ? "PAUSED" : "RUNNING"), 18, 14);
 
     if (state.revenue >= GOAL) {
       ctx.fillStyle = "#ebef9f";
@@ -824,7 +856,7 @@
       .join(", ");
 
     productionEl.innerHTML =
-      "📦 Raw boxes consumed: " + state.stats.leek + "<br>" +
+      "🥬 Raw consumed: " + state.stats.leek + "<br>" +
       "✂ Chopped: " + state.stats.chopped + "<br>" +
       "🍲 Stew: " + state.stats.stew + "<br>" +
       "📦 Boxes: " + state.stats.box + "<br>" +
@@ -932,7 +964,7 @@
       return;
     }
 
-    if (e.key >= "1" && e.key <= "7") {
+    if (e.key >= "1" && e.key <= "9") {
       const type = Object.values(BUILDINGS)[Number(e.key) - 1]?.key;
       if (type) setTool(type);
     } else if (e.key.toLowerCase() === "r") {
