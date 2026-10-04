@@ -202,7 +202,7 @@
     for (let i = 0; i < 4; i++) {
       const d = DIRS[i];
       const b = cellAt(building.x + d.x, building.y + d.y);
-      if (b && b.type === "belt" && b.item) {
+      if (b && b.type === "belt" && b.item && b.item.t >= 1) {
         sources.push(b);
       }
     }
@@ -227,7 +227,7 @@
     const target = cellAt(p.x, p.y);
     if (!target) return false;
     if (target.type === "belt" && !target.item) {
-      target.item = item;
+      target.item = { type: item, t: 0 };
       return true;
     }
     if (target.type === "market" && item === "box") {
@@ -242,24 +242,32 @@
     return { x: belt.x + d.x, y: belt.y + d.y };
   }
 
-  function updateBelts() {
+  function updateBelts(dt) {
     const belts = [...state.buildings.values()].filter(b => b.type === "belt" && b.item);
     for (const belt of belts) {
       if (!belt.item) continue;
+      belt.item.t = Math.min(1, belt.item.t + dt * 1.65 * state.efficiency);
+    }
+
+    // Resolve completed items from downstream to upstream so a whole line
+    // visibly advances one item at a time without teleporting through belts.
+    for (const belt of belts.reverse()) {
+      if (!belt.item || belt.item.t < 1) continue;
       const p = beltTarget(belt);
       if (!inBounds(p.x, p.y)) continue;
       const target = cellAt(p.x, p.y);
       if (!target) continue;
+
       if (target.type === "belt" && !target.item) {
         target.item = belt.item;
+        target.item.t = 0;
         belt.item = null;
-      } else if (target.type === "market" && belt.item === "box") {
-        belt.item = null;
-        sellBox(target);
       }
     }
   }
 
+  // Machine recipes are deliberately data-driven: input item -> output item -> value.
+  // Any future machine can use the same processor path without special-case transport code.
   function sellBox(market) {
     state.money += market.sale;
     state.revenue += market.sale;
@@ -324,7 +332,7 @@
       showMessage("Day " + state.day + ". The leek market remains open.");
     }
     // Move first, then consume/produce, so each tick advances the factory one step.
-    updateBelts();
+    updateBelts(dt);
     updateBuildings(dt);
   }
 
@@ -385,8 +393,12 @@
       ctx.fillRect(px + 6, py + 13, TILE - 12, 14);
       drawArrow(cx, cy, b.dir, .9);
       if (b.item) {
+        const t = Math.max(0, Math.min(1, b.item.t));
+        const d = DIRS[b.dir];
+        const itemX = cx + d.x * (t - 0.5) * (TILE - 16);
+        const itemY = cy + d.y * (t - 0.5) * (TILE - 16);
         ctx.font = "18px sans-serif";
-        ctx.fillText(ITEM[b.item].glyph, cx, cy);
+        ctx.fillText(ITEM[b.item.type].glyph, itemX, itemY);
       }
     } else {
       drawArrow(cx, cy + 13, b.dir, .4);
