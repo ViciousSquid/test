@@ -32,7 +32,7 @@
   ];
 
   const ITEMS = {
-    leek: { label: "Raw leek", glyph: "🥬", value: 5 },
+    leek: { label: "Leek box", glyph: "📦", value: 5 },
     chopped: { label: "Chopped leek", glyph: "✂", value: 12 },
     stew: { label: "Leek stew", glyph: "🍲", value: 28 },
     box: { label: "Leek box", glyph: "📦", value: 65 }
@@ -86,8 +86,8 @@
 
   const BUILDINGS = {
     planter: {
-      key: "planter", name: "Leek Patch", hotkey: "1", cost: 100, unlock: 0,
-      desc: "Grows raw leeks", color: "#5b963b", glyph: "🥬", role: "producer",
+      key: "planter", name: "Leek Box Source", hotkey: "1", cost: 100, unlock: 0,
+      desc: "Produces leek boxes", color: "#5b963b", glyph: "🥬", role: "producer",
       time: 2.5, output: "leek"
     },
     belt: {
@@ -156,7 +156,7 @@
     state = freshState();
     addBuilding("planter", 3, 7, 0);
     addBuilding("market", 21, 7, 2);
-    showMessage("Factory online. Build a straight production line and watch it run.");
+    showMessage("Factory online. Build a straight production line and watch the boxes move.");
     updateBuildMenu();
   }
 
@@ -824,7 +824,7 @@
       .join(", ");
 
     productionEl.innerHTML =
-      "🥬 Raw consumed: " + state.stats.leek + "<br>" +
+      "📦 Raw boxes consumed: " + state.stats.leek + "<br>" +
       "✂ Chopped: " + state.stats.chopped + "<br>" +
       "🍲 Stew: " + state.stats.stew + "<br>" +
       "📦 Boxes: " + state.stats.box + "<br>" +
